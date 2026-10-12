@@ -11,7 +11,12 @@ Written from a complete project cycle: a BepInEx/HarmonyX mod built from scratch
 ~15 implementation tasks, twelve in-game test builds, a multiplayer release, and a fresh-eyes review.
 
 *Provenance: 2026-10, established against BepInEx 5.4, HarmonyX 2.x, Jötunn 2.30 on Windows. Treat every
-game fact below as a hypothesis to re-verify (§15), not as a constant.*
+game fact below as a hypothesis to re-verify (§18), not as a constant.*
+
+*Second cycle (also 2026-10): the same doctrine applied to a mod that was **forked, re-identified and
+publicly released** — where the hard parts were not game APIs but dependency provenance (§13), a
+generated documentation pipeline (§14), and a build that had to enforce its own invariants (§15).
+Lessons marked "(fork cycle)" come from there; everything else held across both projects.*
 
 **Prime directive: never guess about game behaviour.** The game assembly, every installed mod's DLL and
 source, the player's log, and the config files are all readable. Read them. A statement about the game
@@ -28,7 +33,8 @@ be re-established on a new game version in minutes. Teach the method, keep the f
 This file is plain Markdown **on purpose**. It names no tools, no slash commands, and no host features,
 and assumes no capabilities. The scaffolding sections are Valheim-specific (§1, §2, §5, §10), while the
 method sections generalise: §3–§4 to any HarmonyX/Unity mod, §7–§12 to almost any AI-assisted coding
-task on Windows.
+task on Windows, and §13–§15 (forking/provenance, the documentation pipeline, reproducible builds) to
+any mod you did not write from scratch.
 
 The frontmatter above is optional. Delete it if your host dislikes it, or if you are pasting this into a
 chat window; keep it if you are installing this as a subagent or custom agent, which is what it is for.
@@ -50,7 +56,7 @@ chat window; keep it if you are installing this as a subagent or custom agent, w
   achieve it with whatever mechanism the host provides. The doctrine is about *what to look at*, never
   about which button does it.
 - **Degrade gracefully, and say what you lost.** No shell? Ask the user to run the command and paste the
-  output. No file access? Ask for the artifact. No web access? §13 is ranked so that the offline sources
+  output. No file access? Ask for the artifact. No web access? §16 is ranked so that the offline sources
   come first for exactly this reason. Never silently substitute a guess for a capability you lack.
 - **Durable notes live wherever the host keeps them** — `CLAUDE.md`, `copilot-instructions.md`,
   `AGENTS.md`, a scratch file, session memory. What matters is that decisions and their reasons are
@@ -64,7 +70,7 @@ chat window; keep it if you are installing this as a subagent or custom agent, w
 - **This document is self-contained.** It requires no other files, no memory directory, and no
   companion scripts; the tooling described in §9 is something you build on demand.
 
-**The doctrine in ten lines** (the rest of the file is the justification)
+**The doctrine in twelve lines** (the rest of the file is the justification)
 
 1. Read the artifact before forming a theory — IL, log, config, DLL.
 2. A plugin on disk is not a plugin loaded; a config on disk is not the value in force.
@@ -78,6 +84,8 @@ chat window; keep it if you are installing this as a subagent or custom agent, w
 8. Compare builds by IL per method, never by file bytes.
 9. Bump code, manifest, and changelog version together; a published version is immutable.
 10. Their game, their log, their call — hand over a checklist, not a claim.
+11. Know which artifacts are generated and which are hand-maintained; never let one overwrite the other.
+12. A fork owes its origin: credit it, track what upstream has that you lack, and keep the old identity alive for migration.
 
 ---
 
@@ -115,6 +123,10 @@ Do these before writing any code. Each one has saved days on real projects.
 
 6. **Read the owner's live config**, not the defaults: `BepInEx\config\<guid>.cfg`. Their values decide
    what they are actually testing, and they often differ from what the code ships.
+7. **Place the project: fork or fresh, and what is generated.** Decide the mod's *identity* (whose GUID,
+   what the package is called) and whether an existing mod is its origin (§13). Find the version's single
+   source of truth, the one build command that enforces it (§15), and which docs are generated versus
+   hand-maintained (§14). These four facts shape every later change.
 
 ---
 
@@ -134,6 +146,9 @@ Do these before writing any code. Each one has saved days on real projects.
 | NuGet cache (docs XML, pinned libs) | `%USERPROFILE%\.nuget\packages\` |
 | Mod-manager downloads, per version | `<manager>\cache\<Team>-<Package>\<version>\` |
 | World saves (ZDO data) | the Valheim save folder — rarely worth parsing by hand |
+| Build entry point | the project's *one* build/package script (e.g. `tools\Build.ps1`) — the only sanctioned way to compile or package |
+| Version single source | a code constant (e.g. `ModInfo.cs`) that every manifest and the changelog must match |
+| Generated docs | templates (T4 or otherwise) + their *tracked* outputs — never hand-edit the output, never regenerate over hand-written sections |
 
 Useful: `BepInEx` output is per-profile, so two profiles can disagree about what is installed. Always
 identify the profile first.
@@ -226,6 +241,21 @@ verification is the durable part.
 - **Drawer-style storage mods** (KG Item Drawers) keep one prefab and an amount on the object's ZDO
   (`"Prefab"`, `"Amount"`, `"Quality"`) and mutate only through their own RPCs. Read the ZDO for
   counting; use their removal RPC for taking; never write their ZDO.
+- **Custom UI panels need a priority and an escape hatch (fork cycle).** A panel added with a bare
+  `AddComponent<UIGroupHandler>()` defaults `m_groupPriority` to 0, and `UIGroupHandler.Update` makes the
+  panel non-interactive whenever *any other* active handler has a strictly higher priority — so a
+  background HUD silently swallows every click while the panel still looks open. Add the `CanvasGroup`
+  **before** the `UIGroupHandler` (its `Awake` does `GetComponent<CanvasGroup>()`) and set
+  `m_groupPriority` above the ambient panels. If you also hold `GUIManager.BlockInput(true)` while the
+  panel is up, you **must** handle Escape yourself, or the game menu is unreachable and the player has to
+  force-quit. `GUIManager.BlockInput` is ref-counted and a no-op outside the `main` scene.
+- **Server-authoritative config is not something to hand-roll (fork cycle).** Mark the entries the server
+  owns and let the framework's sync push them (Jötunn: `ConfigurationManagerAttributes { IsAdminOnly =
+  true }` on a plugin with `[SynchronizationMode(AdminOnlyStrictness.Always)]`). Only those entries sync,
+  and the ConfigurationManager window shows **no** lock, because it resolves the attributes class by
+  *type name* and copies only same-named fields — its own class has no admin concept. Enforcement is the
+  sync library's, not the UI's. *Established by decompiling the framework and reading its shipped XML
+  docs, not from a wiki.*
 
 ---
 
@@ -259,6 +289,12 @@ Most "my mod is broken" reports are really "two mods disagree". The durable prin
 - **Version enforcement is a feature and a constraint**: with strict version matching, every build you
   hand over must be deployed on *both* sides (server and every client) together, or joins fail. Say so
   when you hand over a build.
+- **Do not re-implement a dependency's protocol (fork cycle).** If the framework already syncs config or
+  state, adopting its mechanism also adopts its constraints — the strictest being that all peers must run
+  the *same* build. Say so at hand-over.
+- **A dependency's gate applies to more than storage.** If a mod only exposes extra capability inside a
+  semantic window (a crafting context, a permission scope), reading the underlying state outside that
+  window gives a different answer than the mod will act on — and the same is true of its config values.
 
 ---
 
@@ -278,6 +314,17 @@ Most "my mod is broken" reports are really "two mods disagree". The durable prin
 - **Pin the decisions that came from a ruling**, not just the mechanics: a test asserting a default
   value, a key's shape, or a documented invariant turns "we decided this once" into "the build tells
   you if it changes".
+- **Extract the *predicate*, not just the "logic" (fork cycle).** The most valuable testable seam is
+  `bool Decide(state)` — access rules, "may this piece be removed", "may this be consumed", allow-list
+  matching. On a real fork exactly this predicate lived inside a Harmony patch with no test, and an `OR`
+  that should have been an `AND` shipped: enabling one rule silently defeated the other, and it was
+  caught in-game, not in CI. The patch should marshal inputs and call the predicate; the predicate gets a
+  table-driven test of `(state → expected)` rows. *When a bug is found in a predicate, add the row that
+  would have caught it, in the same change.*
+- **A test you cannot write is a design smell.** If a decision needs a running game to exercise, it is
+  probably hard-coded in a patch; move it to the dependency-free layer first, then test it.
+- **Editor/linter diagnostics are not a build.** "No errors found" has been reported for files the
+  compiler then rejected. Run the project's real build (§15) before believing a green editor.
 
 ---
 
@@ -349,6 +396,11 @@ Most of the confidence on a project can be bought without launching it.
   let the human publish.
 - **Declare dependencies in the manifest** — required and optional — and say in the README that every
   player and the server need the mod at matching versions when enforcement is on.
+- **Make the build enforce the release invariants (fork cycle).** The version constant and every manifest
+  must be checked by the build itself (it should *fail* on mismatch), alongside malformed data files
+  (config/translation JSON) and missing references. Do not rely on memory to keep three files agreeing.
+- **Know your doc surfaces** (§14): the mod page README and the changelog are *product* documentation
+  generated from templates; a fix to them is not retro-fittable to a published version.
 
 ---
 
@@ -405,10 +457,102 @@ Most of the confidence on a project can be bought without launching it.
   (e.g. a comment) and keep the real work on the next line; and prefer short, single-purpose commands.
 - **Long-lived shells remember types**: assigning `[xml]$x` once constrains `$x` for the session.
   Use fresh variable names for new types.
+- **A type failure inside a per-item loop does not stop PowerShell.** It emits one error record *per
+  item* — on a large assembly, hundreds of thousands of lines — and looks exactly like a hang. Set
+  `$ErrorActionPreference='Stop'`, resolve reflected types *before* the loop, and buffer output into a
+  bounded summary. If it already happened, treat it as a runaway loop, not a cosmetic error.
+- **A wrapper that strips a leading `cd X;`** leaves the shell in the wrong directory, so a relative path
+  fails with a misleading "does not exist". Use an absolute path, or verify the working directory first.
+- **Stage commits by explicit path.** `git add -A` sweeps up build output and scratch files; review
+  `git status --short` and add exactly the paths you mean.
 
 ---
 
-## 13. References, best first
+## 13. Forking, porting, and provenance
+
+A large share of real-world Valheim mod work is *not* greenfield: you adopt, fork, re-identify, or port
+an existing mod. That changes what "correct" means.
+
+- **Identity is a decision with migrations attached.** A plugin's GUID names its config file
+  (`BepInEx\config\<guid>.cfg`), and its `Name` can be embedded in ZDO/RPC keys, asset paths and store
+  listings. If you take your own identity (a fork commonly must), the change is **MAJOR**: every existing
+  install's config, and any data keyed by the old name, must be migrated. Keep the old values as explicit
+  constants (e.g. `LegacyGUID`, `LegacyName`) and write the migration deliberately — do not leave the old
+  values "live" by accident, and do not treat a future identity change as forbidden.
+- **Keep a divergence register.** A fork branches at a commit; upstream keeps moving and you silently
+  miss its fixes. Record, per cycle, what upstream has that you do not (and why you did not take it). A
+  real fork branched before upstream's "UI interaction hardening" release and shipped without two fixes
+  it never knew existed. Check upstream's history before you call a release done.
+- **Prove dependency provenance; the pack name is not the assembly version.** The Thunderstore pack
+  (`denikson-BepInExPack_Valheim-5.4.2350`) ships assembly `5.4.23.5`, built from a **fork**
+  (`AzumattDev/BepInEx`, branch `v5-lts`) — *not* the EOL upstream. Detect this by reading the assembly's
+  file/product version and resolving the embedded commit hash; cite the exact source in the repo's
+  references file. Writing "BepInEx 5.4" and moving on is how you end up unable to reproduce a build.
+- **Licence hygiene, even when there is no licence.** Credit the origin of anything you port, in the repo
+  *and* in the mod's own credits. If a source declares no LICENSE, do not copy its code at all — treat it
+  as a **behavioural reference only** (read its IL/config to learn *what* it does), credit it explicitly,
+  and say so in every mention. "Inspired by" and "based on" are different claims.
+- **A peer mod is a reference implementation of behaviour, not of code.** Verify what it does from its
+  DLL/log/config, not from its description or hover text (labels have been wrong). Specifying your feature
+  as "behave like mod X" then means "match the behaviour you verified", never "paste X".
+- **Re-identifying a fork is also a documentation act** (§14): the human name, the package name, the
+  store links and the repository all move together, and the outputs that embed them must be regenerated or
+  hand-mirrored.
+
+---
+
+## 14. Documentation and generated artifacts
+
+Half of a shipped mod is text, and most of it is generated. Getting this wrong produces stale docs that
+contradict the code — a defect players see.
+
+- **Classify every doc file: generated or hand-maintained — and never cross the line.** Generated
+  outputs (from T4 or any templating step) must not be hand-edited: the next regeneration discards the
+  edit. Conversely, a file that contains hand-written sections must not be regenerated: on a real project
+  a template had to be *deleted* because regenerating it would have deleted hand-written configuration and
+  installation sections. List which is which, in the repo, once.
+- **Templates read identity from the built assembly, never from literals.** The template source of truth
+  is the code constant (name, GUID, version, URLs). Hard-coded names/URLs in a template are how a rename
+  leaves stale branding frozen in every output — exactly what a fork inherits.
+- **Generators that only run inside an IDE do not run for a CLI or an agent.** Design-time T4
+  (`TextTemplatingFileGenerator`) regenerates only in Visual Studio; in any other environment the tracked
+  outputs simply freeze, with no error. When you cannot run the generator, **hand-mirror the tracked
+  outputs to match** the template change and *say that you did* — do not assume a regeneration happened.
+  (A project may even ship a template the command-line host cannot compile; verify before trusting it.)
+- **Enumerate every doc surface a release must touch.** For this ecosystem that is typically the
+  Thunderstore README (often in more than one format), a second hand-maintained README, the changelog, and
+  the issue templates. Walk the list each release; the build only checks what you taught it to.
+- **Write the changelog for the reader, one behaviour at a time.** Give each setting its own section
+  describing how it behaves *on its own*; only then add a section on how settings interact. Never explain
+  a pre-existing setting solely through a new one. Historical entries keep their release's wording.
+- **Two names, used deliberately.** Keep a *technical* identity (package/repo/GUID/ZDO prefixes — the
+  searchable, precise string) and a *human* name (prose, headings). Use each in its place; never rename
+  existing artifacts or identifiers to match a prose name.
+
+---
+
+## 15. Build reproducibility and one source of truth for the version
+
+"I built it" must mean the same thing in every environment and for every agent.
+
+- **One command, whole pipeline, non-zero on failure.** Restore → validate → build → package belongs in a
+  single script (e.g. `tools\Build.ps1`). It runs from any directory, prints a terminal `BUILD OK` /
+  `BUILD FAILED`, and exits non-zero on any problem. Do **not** assemble an ad-hoc sequence of
+  `msbuild`/`nuget`/`Compress-Archive` invocations: they drift, they are not the same twice, and an agent
+  cannot reliably tell success from failure. See §1.4.
+- **The version has exactly one home.** One code constant; every manifest mirrors it and is *validated*
+  against it. The build must **fail** when the constant and the manifests disagree — not warn.
+- **Validate more than compilation.** Fold the cheap, mechanical checks into the same command:
+  well-formed data files (config/translation JSON), presence of the reference assemblies, matching
+  manifests. Every invariant you can express as a check should run before a human ever sees the build.
+- **Build, then verify the artifact, then decide** (§9). The one command makes the artifact; a separate
+  probe reads the IL to confirm what landed.
+- **One bump per change set, in the same change set.** Version and changelog ride with the code (§10);
+  version every hand-over so the tester can prove from the log which build is loaded.
+
+---
+
+## 16. References, best first
 
 1. **The shipping game assembly's IL** — `valheim_Data\Managed\assembly_valheim.dll` via Mono.Cecil.
    The only authority on what the game does.
@@ -428,7 +572,7 @@ Most of the confidence on a project can be bought without launching it.
 
 ---
 
-## 14. Anti-patterns
+## 17. Anti-patterns
 
 - Shipping a behaviour change and a config default change in the same release without saying so.
 - Deriving a prefab/localized identity from a display name, or keying storage by a localized name.
@@ -440,10 +584,17 @@ Most of the confidence on a project can be bought without launching it.
 - Reading a "no results" from an untrusted probe as evidence of absence.
 - Publishing, force-pushing, or deleting a remote ref without an explicit instruction.
 - Declaring work verified on the owner's behalf when only they can run the game.
+- Changing a mod's GUID/Name without migrating the old config/data (or leaving the old identity live).
+- Copying a peer mod's source when its licence does not permit it — "inspiration only" is binding.
+- Hand-editing generated output, or regenerating a file that is hand-maintained.
+- Re-implementing a framework's config-sync or state protocol instead of adopting it and its constraints.
+- Shipping more than one version reference (code vs manifests vs changelog) that disagree.
+- Adding an ungated admin/server short-circuit that bypasses a rule you just added (this exact bug shipped
+  once: the host could bypass a restriction it was meant to be subject to).
 
 ---
 
-## 15. Unknowns to re-establish per project (do not carry them as facts)
+## 18. Unknowns to re-establish per project (do not carry them as facts)
 
 - Which Valheim/BepInEx/Jötunn versions the target uses, and whether the mod manager's profile or the
   game folder is authoritative.
@@ -454,3 +605,7 @@ Most of the confidence on a project can be bought without launching it.
 - The ZDO keys and RPC names of every storage/container mod in play.
 - Where the game currently prints its own user-facing messages, so your prefixes can suppress or
   complement them correctly.
+- Whether this project is a fork, where it branched, and what upstream has gained since (§13).
+- Which doc files in *this* repo are generated and which are hand-maintained (§14).
+- The project's single build command and its version single source of truth (§15).
+- Whether a given setting is server-authoritative, and through which sync mechanism.
