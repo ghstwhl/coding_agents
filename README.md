@@ -12,6 +12,7 @@ under any agent runtime, or pasted into a chat window.
 
 | Skill | Path | Purpose |
 |---|---|---|
+| Apple App Developer | [`skills/apple-app-developer/SKILL.md`](skills/apple-app-developer/SKILL.md) | Build, fix, debug, and ship Swift apps for Apple platforms. Covers iPad+Mac twins from one source tree, XcodeGen projects, SwiftUI/AppKit presentation traps, CoreBluetooth and the sandbox, entitlements, Release-only failures, and build-numbered releases. |
 | Valheim Modder | [`skills/valheim-modder/SKILL.md`](skills/valheim-modder/SKILL.md) | Build, fix, debug, and ship Valheim (BepInEx/HarmonyX) mods. Covers game-API and IL investigation, cross-mod compatibility, and release packaging. |
 
 <!-- New skills go in the table above, in alphabetical order by skill name. -->
