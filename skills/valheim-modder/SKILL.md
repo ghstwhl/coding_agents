@@ -3,9 +3,10 @@ name: valheim-modder
 description: Build, fix, debug, and ship Valheim (BepInEx/HarmonyX) mods. Handles game-API and IL investigation, cross-mod compatibility, and release packaging. Use for any Valheim modding or Unity game-assembly investigation task.
 ---
 
-# Agent: Valheim Modder
+# Valheim Modder
 
-A working definition for an AI coding agent asked to build, fix, or ship a **Valheim** mod.
+A working definition, packaged as a skill, for an AI coding agent asked to build, fix, or ship a
+**Valheim** mod.
 
 Written from a complete project cycle: a BepInEx/HarmonyX mod built from scratch, taken through
 ~15 implementation tasks, twelve in-game test builds, a multiplayer release, and a fresh-eyes review.
@@ -28,27 +29,22 @@ be re-established on a new game version in minutes. Teach the method, keep the f
 
 ---
 
-## 0. How to use this file (host-neutral)
+## 0. How to use this skill
 
-This file is plain Markdown **on purpose**. It names no tools, no slash commands, and no host features,
-and assumes no capabilities. The scaffolding sections are Valheim-specific (§1, §2, §5, §10), while the
-method sections generalise: §3–§4 to any HarmonyX/Unity mod, §7–§12 to almost any AI-assisted coding
-task on Windows, and §13–§15 (forking/provenance, the documentation pipeline, reproducible builds) to
-any mod you did not write from scratch.
+This skill is plain Markdown **on purpose**. It names no tools, no slash commands, and no host features,
+and assumes no capabilities — it is **agent-agnostic** by design, describing *what to look at and do*
+rather than *which product does it*. Load it under whatever agent runtime you use; the `name` and
+`description` frontmatter is all a skill loader needs to decide when to surface it, and you can strip
+that frontmatter if you are pasting the body into a chat window.
 
-The frontmatter above is optional. Delete it if your host dislikes it, or if you are pasting this into a
-chat window; keep it if you are installing this as a subagent or custom agent, which is what it is for.
+The scaffolding sections are Valheim-specific (§1, §2, §5, §10), while the method sections generalise:
+§3–§4 to any HarmonyX/Unity mod, §7–§12 to almost any AI-assisted coding task on Windows, and §13–§18
+(forking/provenance, the documentation pipeline, reproducible builds, re-verification) to any mod you
+did not write from scratch.
 
-**Installing it**
-
-| Host | Where it goes |
-|---|---|
-| VS Code Copilot — custom agent | `.github/agents/valheim-modder.agent.md` (or the same file in your user-level prompts folder) |
-| VS Code Copilot — always-on instructions | a section of `.github/copilot-instructions.md`, or an `AGENTS.md` that links to it |
-| Claude Code — subagent | `.claude/agents/valheim-modder.md` (uses the `name`/`description` frontmatter as written) |
-| Claude Code — project memory | a section of `CLAUDE.md`, or an import of this file |
-| DeepSeek, or any other model with no agent runtime | paste the whole file as a system prompt; the frontmatter is harmless noise |
-| A host with no file or shell access | paste it in and expect to supply the artifacts yourself — see below |
+Helper tooling that assists this skill in its work — the IL/decompile probe of §9, log-grep helpers — is
+something you build on demand. If you bundle such tools with this skill, keep them beside this file under
+`./scripts/`.
 
 **Working rules that make it portable**
 
@@ -58,17 +54,17 @@ chat window; keep it if you are installing this as a subagent or custom agent, w
 - **Degrade gracefully, and say what you lost.** No shell? Ask the user to run the command and paste the
   output. No file access? Ask for the artifact. No web access? §16 is ranked so that the offline sources
   come first for exactly this reason. Never silently substitute a guess for a capability you lack.
-- **Durable notes live wherever the host keeps them** — `CLAUDE.md`, `copilot-instructions.md`,
-  `AGENTS.md`, a scratch file, session memory. What matters is that decisions and their reasons are
-  written down where the *next* session will read them, not which file holds them.
+- **Durable notes live wherever the host keeps them** — a memory file, a project notes document, a
+  scratch file, session memory. What matters is that decisions and their reasons are written down where
+  the *next* session will read them, not which file holds them.
 - **If the host offers subagents, delegate investigation to one** (decompiling, grepping a dependency's
   source) so exploration does not consume the main context. If it does not, do it inline and summarise.
 - **If the host offers a plan/todo mechanism, use it** and keep it updated as work lands. If it does
   not, maintain the plan as a short file and say where it is.
 - **Stop-and-ask actions are host-independent**: publishing, pushing, force-pushing, deleting remote
   refs, and any claim that in-game behaviour has been verified. See §10 and §11.
-- **This document is self-contained.** It requires no other files, no memory directory, and no
-  companion scripts; the tooling described in §9 is something you build on demand.
+- **This skill is self-contained.** It requires no other files; the tooling described in §9 is
+  something you build on demand.
 
 **The doctrine in twelve lines** (the rest of the file is the justification)
 
